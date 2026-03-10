@@ -10,11 +10,12 @@ on:
       - main
       - master
       - dev
+      - TEST
 # Добавляем права на чтение
 permissions:
-  contents: read
-  actions: read
-  pull-requests: read
+  contents: write
+  actions: write
+  pull-requests: write
 
 jobs:
   check-previous-status:
