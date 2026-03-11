@@ -84,7 +84,7 @@ jobs:
           echo "${{ steps.bump.outputs.new_version }}" > VERSION
           echo "VERSION file updated to: ${{ steps.bump.outputs.new_version }}"
 
-      - name: Commit and push with force lease
+      - name: Commit and push with retry
         run: |
           git add VERSION
           
@@ -97,15 +97,29 @@ jobs:
           # Создаем коммит
           git commit -m "[${{ steps.bump.outputs.new_version }}] <- [${{ steps.bump.outputs.old_version }}] ${{ steps.bump.outputs.version_type }} up"
           
-          # Сначала пытаемся сделать pull с rebase
-          echo "Pulling latest changes with rebase..."
-          git pull --rebase origin ${{ github.event.pull_request.base.ref }} || true
+          # Пытаемся запушить с retry
+          MAX_RETRIES=5
+          RETRY_COUNT=0
           
-          # Пытаемся запушить с force-with-lease (безопасный force push)
-          echo "Pushing with force-with-lease..."
-          git push --force-with-lease origin HEAD:${{ github.event.pull_request.base.ref }}
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            echo "Push attempt $((RETRY_COUNT + 1)) of $MAX_RETRIES"
+            
+            # Сначала pull с rebase
+            git pull --rebase origin ${{ github.event.pull_request.base.ref }} || true
+            
+            # Пытаемся push
+            if git push origin HEAD:${{ github.event.pull_request.base.ref }}; then
+              echo "✅ Successfully pushed version update"
+              exit 0
+            else
+              echo "⚠️ Push failed, retrying in 3 seconds..."
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              sleep 3
+            fi
+          done
           
-          echo "✅ Successfully pushed version update"
+          echo "❌ Failed to push after $MAX_RETRIES attempts"
+          exit 1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
